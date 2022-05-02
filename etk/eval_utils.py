@@ -2,6 +2,10 @@ import re
 import numpy as np
 
 def batch_loader(seq, size):
+    """
+    Iterator that takes in a list `seq` and returns
+    chunks of size `size` 
+    """
     return [seq[pos:pos + size] for pos in range(0, len(seq), size)]
 
 
@@ -18,6 +22,13 @@ def pass_k(lst, k):
 
 
 def gptneo_tokens_to_programs(outs, input_length, tokenizer): 
+    """
+    Converts raw gpt-neo model outputs to executable programs
+
+    outs: rank-2 tensor (sample, token) 
+    input_length: length of prompt in tokens
+    tokenizer: 
+    """
     generated_ids = [ids[input_length:] for ids in outs]
     untrunced_bodies = [tokenizer.decode(sample, skip_specials_tokens=False)
             for sample in generated_ids]

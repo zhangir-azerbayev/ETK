@@ -10,8 +10,6 @@ from ratelimit import limits, sleep_and_retry
 from itertools import zip_longest
 import time
 
-def batch_loader(seq, size):
-    return [seq[pos:pos + size] for pos in range(0, len(seq), size)]
 
 @sleep_and_retry
 @limits(calls=1, period=60)
