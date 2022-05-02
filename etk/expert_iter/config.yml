@@ -1,0 +1,13 @@
+experiment_name: 05_fixeddecoding
+param_count: 125M
+devices: "0"
+num_gpus: 1
+epochs: 1
+max_length: 400
+inference_batch_size: 5
+inference_num_samples: 80
+train_batch_size: 32
+num_iters: 15
+from_checkpoint: 9
+weight_decay: 0.01
+num_seeds: 1000
