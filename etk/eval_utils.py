@@ -21,7 +21,7 @@ def pass_k(lst, k):
                         np.arange(n-c+1, n+1))
 
 
-def gptneo_tokens_to_programs(outs, input_length, tokenizer): 
+def gptneo_tokens_to_programs(outs, input_length, tokenizer, verbose=False): 
     """
     Converts raw gpt-neo model outputs to executable programs
 
@@ -32,10 +32,11 @@ def gptneo_tokens_to_programs(outs, input_length, tokenizer):
     generated_ids = [ids[input_length:] for ids in outs]
     untrunced_bodies = [tokenizer.decode(sample, skip_specials_tokens=False)
             for sample in generated_ids]
+    
 
     untrunced_bodies = [x.replace("<|endoftext|>", "") for x in untrunced_bodies]
 
-    re_key = '^answer.*?\n'
+    re_key = '\nanswer.*?\n'
 
     bodies = [completion[:re.search(re_key, completion).span()[1]]
         if re.search(re_key, completion) else completion
