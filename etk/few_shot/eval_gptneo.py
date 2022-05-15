@@ -7,7 +7,7 @@ import torch
 from transformers import GPTNeoForCausalLM, GPT2Tokenizer
 
 from etk.data.mathqa_dataset import read_gsm8k
-from etk.eval_utils import batch_loader, gptneo_tokens_to_programs
+from etk.eval_utils import batch_loader, gptneo_tokens_to_log_entry
 from etk.execution import semisafe_evaluate
 
 device = f"cuda:{sys.argv[1]}"
@@ -62,31 +62,16 @@ for batch in tqdm(dataloader):
 
     outputs = torch.reshape(outputs, (batch_length, num_samples, -1))
 
-    for text, task_id, label, outs, prompt_len in zip(texts, task_ids, labels, outputs, prompt_lens): 
+    for text, task_id, label, outs, prompt_len in zip(texts, 
+            task_ids, labels, outputs, prompt_lens): 
 
-        bodies = gptneo_tokens_to_programs(outs, prompt_len, tokenizer)
+        log_entry, _ = gptneo_tokens_to_log_entry(outs, 
+                                                  label,
+                                                  prompt_len, 
+                                                  tokenizer)
 
-        answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
-        passed_lst = [(abs(answer-label)/max(label, 1e-5))<0.01
-                if isinstance(answer, float) else False
-                for answer in answers]
-
-        if True in passed_lst: 
-            gold_code = bodies[passed_lst.index(True)]
-            passed = 1 
-        else: 
-            gold_code=False
-            passed = 0 
-
-        pass_1 = sum(passed_lst)/len(passed_lst)
         with open(f"results/{filename}.jsonl", "a+") as f: 
-            record = json.dumps({"task_id": task_id, 
-                                 "text": text, 
-                                 "answer": label, 
-                                 "gold_solution": gold_code,
-                                 "passk": passed, 
-                                 "pass1": pass_1, 
-                                 "passed_lst": passed_lst})
+            record = json.dumps(log_entry)
             f.write(record+'\n')
 
 

@@ -1,5 +1,6 @@
 import re 
 import numpy as np
+from etk.execution import semisafe_evaluate
 
 def batch_loader(seq, size):
     """
@@ -42,4 +43,42 @@ def gptneo_tokens_to_programs(outs, input_length, tokenizer, verbose=False):
         if re.search(re_key, completion) else completion
         for completion in untrunced_bodies]
 
+    if verbose: 
+        for x in bodies: 
+            print("#"*40)
+            print(x)
+
     return bodies
+
+def gptneo_tokens_to_log_entry(outs, 
+                               label, 
+                               input_length, 
+                               tokenizer, 
+                               verbose=False
+                               ): 
+    bodies = gptneo_tokens_to_programs(outs, input_length, tokenizer, verbose)
+
+    answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
+
+    passed_lst = [(abs(answer-label)/max(label, 1e-5))<0.01
+            if isinstance(answer, float) else False
+            for answer in answers]
+
+    if True in passed_lst:
+        gold_code = bodies[passed_lst.index(True)]
+        passed = 1
+    else:
+        gold_code=False
+        passed = 0
+
+    pass_1 = sum(passed_lst)/len(passed_lst)
+
+    log_entry = {"task_id": task_id,
+                         "text": text,
+                         "answer": label,
+                         "gold_solution": gold_code,
+                         "passk": passed,
+                         "pass1": pass_1,
+                         "passed_lst": passed_lst})
+
+    return log_entry, bodies
