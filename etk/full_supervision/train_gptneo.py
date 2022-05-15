@@ -2,8 +2,9 @@ import sys
 import os
 import yaml 
 import math
+import json
 
-from data.mathqa_dataset.py import MathQATrainSet
+from etk.data.mathqa_dataset import MathQATrainSet
 
 import torch 
 import torch.nn
@@ -15,16 +16,23 @@ from transformers import AdamW
 from transformers.trainer_pt_utils import get_parameter_names
 
 def load_trainset_from_log(path, tokenizer, max_length): 
-    with open(path) as f: 
-        result = json.load(path)
+    with open(path, "r") as f: 
+        result = json.load(f)
 
     log = result["log"]
 
-    filtered_log = [x if x["passed"]==1 for x in log]
+    filtered_log = [x for x in log if True in x["passed_lst"]]
 
     dataset = MathQATrainSet(filtered_log, tokenizer, max_length)
 
     return dataset
+
+def data_collator(data):
+    return {'input_ids': torch.stack([f[0] for f in data]),
+            'attention_mask': torch.stack([f[1] for f in data]),
+            'labels': torch.stack([f[0] for f in data])
+           }
+
 
 config_path = sys.argv[1]
 with open(config_path, "r") as f: 
@@ -32,7 +40,7 @@ with open(config_path, "r") as f:
 
 os.environ["CUDA_VISIBLE_DEVICES"] = cfg["devices"]
 experiment_name = cfg["experiment_name"]
-teacher_data_path = cfg["log_path"]
+teacher_data_path = cfg["teacher_data_path"]
 lr = cfg["lr"]
 epochs = cfg["epochs"]
 batch_size = cfg["batch_size"]
@@ -50,7 +58,7 @@ tokenizer.pad_token = tokenizer.eos_token
 dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length)
 
 #Loads model
-model = GPTNeoForCausalLM("EleutherAI/gpt-neo-{param_count}")
+model = GPTNeoForCausalLM.from_pretrained(f"EleutherAI/gpt-neo-{param_count}")
 
 # Optimizer 
 decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
@@ -69,10 +77,13 @@ optimizer_grouped_parameters = [
 ]
 
 optimizer = AdamW(optimizer_grouped_parameters, lr=lr)
-scheduler = LambdaLR(optimizer, lr_lambda = lambda x: x)
+scheduler = LambdaLR(optimizer, lr_lambda = lambda x: 1)
 
 
 # Configure training
+with open(os.path.join(results_dir, "config.yml"), "w") as f: 
+    yaml.dump(cfg, f)
+
 steps_per_epoch = math.ceil(len(dataset)/batch_size)
 training_args = TrainingArguments(output_dir=results_dir,
                                   num_train_epochs=epochs,

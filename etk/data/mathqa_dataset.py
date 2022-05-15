@@ -10,7 +10,7 @@ class MathQATrainSet(torch.utils.data.Dataset):
         self.max_length = max_length
 
     def __getitem__(self, idx): 
-        dct = log_lst[idx]
+        dct = self.log_lst[idx]
 
         full_text = dct["text"] + "\n" + dct["gold_solution"]
 
@@ -27,7 +27,7 @@ class MathQATrainSet(torch.utils.data.Dataset):
         return ids.long(), mask.long()
 
     def __len__(self): 
-        return len(log_lst)
+        return len(self.log_lst)
 
 class MathQAInstance(): 
     def __init__(self, 
