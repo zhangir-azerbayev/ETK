@@ -1,0 +1,11 @@
+devices: "0"
+experiment_name: "codex_teacher_125M_student"
+teacher_data_path: "../few_shot/results/codex_gsm8k_full_pass20.json"
+lr: 2.e-5
+epochs: 50
+batch_size: 16
+weight_decay: 0.01
+param_count: "125M"
+max_length: 400
+
+

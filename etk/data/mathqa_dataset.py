@@ -3,6 +3,32 @@ import json
 import jsonlines
 from pathlib import Path 
 
+class MathQATrainSet(torch.utils.data.Dataset): 
+    def __init__(self, log_lst, tokenizer, max_length): 
+        self.log_lst = log_lst
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __getitem__(self, idx): 
+        dct = log_lst[idx]
+
+        full_text = dct["text"] + "\n" + dct["gold_solution"]
+
+        full_text_encode = self.tokenizer(full_text, 
+                                          max_length=self.max_length, 
+                                          truncation=True, 
+                                          padding='max_length', 
+                                          return_tensors="pt"
+                                          )
+
+        ids = full_text_encode['input_ids'].squeeze()
+        mask = full_text_encode['attention_mask'].squeeze()
+
+        return ids.long(), mask.long()
+
+    def __len__(self): 
+        return len(log_lst)
+
 class MathQAInstance(): 
     def __init__(self, 
                  text, 
