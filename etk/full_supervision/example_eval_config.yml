@@ -1,0 +1,8 @@
+experiment_name: codex_teacher_pass20_student_125M_pass20
+device: "0"
+inference_batch_size: 30
+max_new_tokens: 200
+num_samples: 20
+temp: 0.4
+prompt_length: 200
+model_path: "../train_results/codex_teacher_pass20_student_125M"
