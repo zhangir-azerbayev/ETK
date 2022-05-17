@@ -34,6 +34,11 @@ def gptneo_tokens_to_programs(outs, input_length, tokenizer, verbose=False):
     untrunced_bodies = [tokenizer.decode(sample, skip_specials_tokens=False)
             for sample in generated_ids]
     
+    if verbose: 
+        for x in untrunced_bodies: 
+            print("#"*40)
+            print("untrunced")
+            print(x)
 
     untrunced_bodies = [x.replace("<|endoftext|>", "") for x in untrunced_bodies]
 
@@ -46,16 +51,23 @@ def gptneo_tokens_to_programs(outs, input_length, tokenizer, verbose=False):
     if verbose: 
         for x in bodies: 
             print("#"*40)
+            print("trunced")
             print(x)
 
     return bodies
 
 def gptneo_tokens_to_log_entry(outs, 
                                label, 
+                               task_id,
+                               text,
                                input_length, 
                                tokenizer, 
                                verbose=False
                                ): 
+    if verbose: 
+        print("#"*40)
+        print("text: ")
+        print(text)
     bodies = gptneo_tokens_to_programs(outs, input_length, tokenizer, verbose)
 
     answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
@@ -79,6 +91,6 @@ def gptneo_tokens_to_log_entry(outs,
                          "gold_solution": gold_code,
                          "passk": passed,
                          "pass1": pass_1,
-                         "passed_lst": passed_lst})
+                         "passed_lst": passed_lst}
 
     return log_entry, bodies

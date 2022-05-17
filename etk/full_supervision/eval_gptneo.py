@@ -2,6 +2,7 @@ import json
 import sys 
 from tqdm import tqdm
 import yaml 
+import os
 
 import torch
 
@@ -13,7 +14,7 @@ from etk.execution import semisafe_evaluate
 
 cfg_path = sys.argv[1]
 with open(cfg_path) as f: 
-    cfg = yaml.load(f)
+    cfg = yaml.safe_load(f)
 
 experiment_name = cfg["experiment_name"]
 os.environ["CUDA_VISIBLE_DEVICES"]=cfg["device"]
@@ -23,19 +24,20 @@ num_samples = cfg["num_samples"]
 temp = cfg["temp"]
 prompt_length = cfg["prompt_length"]
 model_path = cfg["model_path"]
+param_count = cfg["param_count"]
 
 results_dir = f"eval_results/{experiment_name}"
 os.mkdir(results_dir)
 
 
-eval_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
+eval_data = read_gsm8k("../data/gsm8k/gsm8k_test.jsonl")
 
-dataloader = batch_loader(train_data, inference_batch_size) 
+dataloader = batch_loader(eval_data, inference_batch_size) 
 
-tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
+tokenizer = GPT2Tokenizer.from_pretrained(f"EleutherAI/gpt-neo-{param_count}")
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.truncation_side='left'
-model = GPTNeoForCausalLM.from_pretrained(model_path).to(device)
+model = GPTNeoForCausalLM.from_pretrained(model_path).to("cuda")
 
 log = []
 for batch in tqdm(dataloader): 
@@ -51,7 +53,7 @@ for batch in tqdm(dataloader):
                           max_length = prompt_length, 
                           truncation=True,
                           padding='max_length', 
-                          ).to(device)
+                          ).to("cuda")
 
     prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
 
@@ -72,13 +74,14 @@ for batch in tqdm(dataloader):
 
         log_entry, _ = gptneo_tokens_to_log_entry(outs, 
                                                   label,
+                                                  task_id,
+                                                  text,
                                                   prompt_len, 
                                                   tokenizer, 
-                                                  verbose=True)
+                                                  verbose=False)
 
         log.append(log_entry)
 
-    break
 
 
 num_examples = len(log)
