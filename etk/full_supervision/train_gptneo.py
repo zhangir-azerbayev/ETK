@@ -10,7 +10,7 @@ import torch
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
-from transformers import GPTNeoForCausalLM, GPT2Tokenizer
+from transformers import GPTNeoForCausalLM, GPT2Tokenizer, AutoModelForCausalLM, AutoTokenizer
 from transformers import TrainingArguments, Trainer 
 from transformers import AdamW
 from transformers.trainer_pt_utils import get_parameter_names
@@ -45,20 +45,20 @@ lr = cfg["lr"]
 epochs = cfg["epochs"]
 batch_size = cfg["batch_size"]
 weight_decay = cfg["weight_decay"]
-param_count = cfg["param_count"]
+model_name = cfg["model_name"]
 max_length = cfg["max_length"]
 
-results_dir = f"results/{experiment_name}"
+results_dir = f"train_results/{experiment_name}"
 os.mkdir(results_dir)
 
 # Configures tokenizer and data
-tokenizer = GPT2Tokenizer.from_pretrained(f"EleutherAI/gpt-neo-{param_count}")
-tokenizer.pad_token = tokenizer.eos_token
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.pad_token = '<|endoftext|>'
 
 dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length)
 
 #Loads model
-model = GPTNeoForCausalLM.from_pretrained(f"EleutherAI/gpt-neo-{param_count}")
+model = AutoModelForCausalLM.from_pretrained(f"model_name")
 
 # Optimizer 
 decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
