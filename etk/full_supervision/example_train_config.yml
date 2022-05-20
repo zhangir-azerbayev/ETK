@@ -1,4 +1,4 @@
-devices: "2"
+devices: "1"
 experiment_name: "codex_teacher_pass20_incoder1B_student"
 teacher_data_path: "../few_shot/results/codex_gsm8k_full_pass20.json"
 lr: 2.e-5

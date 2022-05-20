@@ -13,7 +13,7 @@ import time
 
 
 @sleep_and_retry
-@limits(calls=1, period=100)
+@limits(calls=1, period=60)
 def call_api(engine, prompt, max_tokens, n, temperature): 
     return openai.Completion.create(engine=engine, 
             prompt=prompt, max_tokens=max_tokens, n=n, 
@@ -33,7 +33,7 @@ train_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
 
 dataloader = batch_loader(train_data, num_prompts)
 
-for batch in tqdm(dataloader[237+278+209+120:]): 
+for batch in tqdm(dataloader[237+278+209+120+9+64:]): 
     labels = [instance.answer for instance in batch]
     prompts = [prompt + instance.text for instance in batch]
     texts = [instance.text for instance in batch]

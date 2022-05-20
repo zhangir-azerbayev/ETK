@@ -58,7 +58,7 @@ tokenizer.pad_token = '<|endoftext|>'
 dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length)
 
 #Loads model
-model = AutoModelForCausalLM.from_pretrained(f"model_name")
+model = AutoModelForCausalLM.from_pretrained(model_name)
 
 # Optimizer 
 decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
