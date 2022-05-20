@@ -24,6 +24,7 @@ num_samples = cfg["num_samples"]
 temp = cfg["temp"]
 prompt_length = cfg["prompt_length"]
 model_path = cfg["model_path"]
+model_type = cfg["model_type"] # "gpt-neo" or "incoder"
 param_count = cfg["param_count"]
 
 results_dir = f"eval_results/{experiment_name}"
@@ -78,9 +79,12 @@ for batch in tqdm(dataloader):
                                                   text,
                                                   prompt_len, 
                                                   tokenizer, 
+                                                  model_type,
                                                   verbose=False)
 
         log.append(log_entry)
+        
+        sys.exit()
 
 
 
