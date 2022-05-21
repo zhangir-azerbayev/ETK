@@ -6,15 +6,17 @@ import os
 
 import torch
 
-from transformers import GPTNeoForCausalLM, GPT2Tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from etk.data.mathqa_dataset import read_gsm8k
-from etk.eval_utils import batch_loader, gptneo_tokens_to_log_entry
+from etk.eval_utils import batch_loader, tokens_to_gsm8k_log_entry
 from etk.execution import semisafe_evaluate
 
 cfg_path = sys.argv[1]
 with open(cfg_path) as f: 
     cfg = yaml.safe_load(f)
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false" #for some reason incoder wants this
 
 experiment_name = cfg["experiment_name"]
 os.environ["CUDA_VISIBLE_DEVICES"]=cfg["device"]
@@ -25,7 +27,7 @@ temp = cfg["temp"]
 prompt_length = cfg["prompt_length"]
 model_path = cfg["model_path"]
 model_type = cfg["model_type"] # "gpt-neo" or "incoder"
-param_count = cfg["param_count"]
+model_name = cfg["model_name"]
 
 results_dir = f"eval_results/{experiment_name}"
 os.mkdir(results_dir)
@@ -35,10 +37,11 @@ eval_data = read_gsm8k("../data/gsm8k/gsm8k_test.jsonl")
 
 dataloader = batch_loader(eval_data, inference_batch_size) 
 
-tokenizer = GPT2Tokenizer.from_pretrained(f"EleutherAI/gpt-neo-{param_count}")
-tokenizer.pad_token = tokenizer.eos_token
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.eos_token = "<|endoftext|>"
+tokenizer.pad_token = "<|endoftext|>"
 tokenizer.truncation_side='left'
-model = GPTNeoForCausalLM.from_pretrained(model_path).to("cuda")
+model = AutoModelForCausalLM.from_pretrained(model_path).to("cuda")
 
 log = []
 for batch in tqdm(dataloader): 
@@ -69,18 +72,19 @@ for batch in tqdm(dataloader):
     
 
     outputs = torch.reshape(outputs, (batch_length, num_samples, -1))
+    
 
     for text, task_id, label, outs, prompt_len in zip(texts, 
             task_ids, labels, outputs, prompt_lens): 
 
-        log_entry, _ = gptneo_tokens_to_log_entry(outs, 
+        log_entry, _ = tokens_to_gsm8k_log_entry(outs, 
                                                   label,
                                                   task_id,
                                                   text,
                                                   prompt_len, 
                                                   tokenizer, 
                                                   model_type,
-                                                  verbose=False)
+                                                  verbose=True)
 
         log.append(log_entry)
         

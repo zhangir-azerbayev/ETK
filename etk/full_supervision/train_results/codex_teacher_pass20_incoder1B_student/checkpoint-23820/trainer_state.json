@@ -10,43 +10,43 @@
     {
       "epoch": 5.0,
       "learning_rate": 2e-05,
-      "loss": 0.5255,
+      "loss": 0.5175,
       "step": 3970
     },
     {
       "epoch": 10.0,
       "learning_rate": 2e-05,
-      "loss": 0.2982,
+      "loss": 0.3164,
       "step": 7940
     },
     {
       "epoch": 15.0,
       "learning_rate": 2e-05,
-      "loss": 0.2087,
+      "loss": 0.2218,
       "step": 11910
     },
     {
       "epoch": 20.0,
       "learning_rate": 2e-05,
-      "loss": 0.144,
+      "loss": 0.1488,
       "step": 15880
     },
     {
       "epoch": 25.0,
       "learning_rate": 2e-05,
-      "loss": 0.0989,
+      "loss": 0.0994,
       "step": 19850
     },
     {
       "epoch": 30.0,
       "learning_rate": 2e-05,
-      "loss": 0.0704,
+      "loss": 0.0688,
       "step": 23820
     }
   ],
   "max_steps": 39700,
   "num_train_epochs": 50,
-  "total_flos": 5.54143341477888e+17,
+  "total_flos": 5.527579831241933e+17,
   "trial_name": null,
   "trial_params": null
 }
