@@ -48,3 +48,57 @@ def read_gsm8k(path):
     instance_list = [MathQAInstance(**dct) for dct in data]
 
     return instance_list
+
+def read_gsm8k_with_code(path):
+    """Reads a few-shot run's output and returns a list of MathQAInstance objects. Only returns solved instances with code.
+    
+    Args:
+        path (str): Path to the jsonlines file containing the data. TODO: make this take in a json file, not jsonlines.
+    """
+    path = Path(path)
+
+    with jsonlines.open(path) as fle:
+        data = [line for line in fle.iter()]
+
+    for i in range(len(data)):
+        if data[i]["gold_solution"] is not False:
+            # data[i]["text"]
+            data[i]["code"] = ""
+            data[i]["dsl_code"] = ""
+            data[i]["reasoning"] = data[i]["gold_solution"]
+            # data[i]["answer"]
+            # data[i]["task_id"]
+            data[i].pop("gold_solution")
+            data[i].pop("pass1")
+            data[i].pop("passk")
+            data[i].pop("passed_lst")
+
+            
+    instance_list = [MathQAInstance(**dct) for dct in data if "dsl_code" in dct.keys()] # only return instances with code
+
+    return instance_list
+
+class MathQAPython(torch.utils.data.Dataset): 
+    def __init__(self, instance_list, tokenizer, max_length): 
+        self.data = instance_list 
+        self.tokenizer = tokenizer 
+        self.max_length = max_length
+    
+
+    def __getitem__(self, idx): 
+        instance = self.data[idx]
+        full_text = instance.text + '\n' + instance.code
+        answer = instance.answer
+
+        full_text_encode = self.tokenizer(full_text, 
+                max_length=self.max_length, truncation=True, 
+                padding='max_length', return_tensors='pt')
+        ids = full_text_encode['input_ids'].squeeze()
+        mask = full_text_encode['attention_mask'].squeeze()
+
+        return ids.long(), mask.long(), answer
+
+
+    def __len__(self): 
+        return len(self.data) 
+
