@@ -7,7 +7,7 @@ import torch
 from transformers import GPTNeoForCausalLM, GPT2Tokenizer
 
 from etk.data.mathqa_dataset import read_gsm8k
-from etk.eval_utils import batch_loader, gptneo_tokens_to_log_entry
+from etk.eval_utils import batch_loader, tokens_to_gsm8k_log_entry#gptneo_tokens_to_log_entry
 from etk.execution import semisafe_evaluate
 
 device = f"cuda:0"
@@ -69,9 +69,10 @@ for batch in tqdm(dataloader):
                                                   label,
                                                   task_id, 
                                                   text,
-                                                  prompt_len,
-                                                  "gptneo", 
-                                                  tokenizer)
+                                                  prompt_len, 
+                                                  tokenizer,
+                                                  "gptneo",
+                                                  )
 
         with open(f"results/{filename}.jsonl", "a+") as f: 
             record = json.dumps(log_entry)
