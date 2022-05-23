@@ -27,14 +27,14 @@ train_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
 dataloader = batch_loader(train_data, inference_batch_size)
 
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-j-6B")
-tokenizer.pad_token = tokenizer.eos_token
+# tokenizer.pad_token_id = 50270
 tokenizer.truncation_side='left'
 
 torch.cuda.empty_cache()
 torch.cuda.set_per_process_memory_fraction(1.0)
 
 model = GPTJForCausalLM.from_pretrained(
-    "EleutherAI/gpt-j-6B",
+    "EleutherAI/gpt-j-6B", revision="main",
 )
 
 model.parallelize()
@@ -52,7 +52,7 @@ for batch in tqdm(dataloader):
                           return_tensors="pt", 
                           max_length = prompt_length, 
                           truncation=True,
-                          padding='max_length', 
+                        #   padding='max_length', 
                           ).to(device)
 
     prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
@@ -63,24 +63,24 @@ for batch in tqdm(dataloader):
                              temperature=temp, 
                              max_new_tokens=max_new_tokens,
                              num_return_sequences=num_samples,
-                             pad_token_id=tokenizer.eos_token_id
+                             pad_token_id=50270,
                              ).cpu()
     outputs2 = model.generate(**encoded_texts, 
                              do_sample=True, 
                              temperature=temp, 
                              max_new_tokens=max_new_tokens,
                              num_return_sequences=num_samples,
-                             pad_token_id=tokenizer.eos_token_id
+                             pad_token_id=tokenizer.eos_token_id,
                              ).cpu()
-    outputs = torch.cat((outputs, outputs2), dim=1)
+    outputs = torch.cat((outputs, outputs2), dim=0)
     
-
+    # print(outputs.shape)
     outputs = torch.reshape(outputs, (batch_length, num_samples * 2, -1))
-
+    # print(outputs.shape)
     for text, task_id, label, outs, prompt_len in zip(texts, task_ids, labels, outputs, prompt_lens): 
 
         bodies = gptneo_tokens_to_programs(outs, prompt_len, tokenizer)
-
+        [print("OUTPUT:\n"+body) for body in bodies]
         answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
         passed_lst = [(abs(answer-label)/max(label, 1e-5))<0.01
                 if isinstance(answer, float) else False
