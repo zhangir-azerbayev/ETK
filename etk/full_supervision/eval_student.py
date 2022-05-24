@@ -59,8 +59,11 @@ for batch in tqdm(dataloader):
                           padding='max_length', 
                           ).to("cuda")
 
-    prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
+    # consistency with training
+    if model_type=="incoder": 
+        encoded_texts = {key: encoded_texts[key][:,1:] for key in encoded_texts}
 
+    prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
 
     outputs = model.generate(**encoded_texts, 
                              do_sample=True, 
@@ -84,11 +87,10 @@ for batch in tqdm(dataloader):
                                                   prompt_len, 
                                                   tokenizer, 
                                                   model_type,
-                                                  verbose=True)
+                                                  verbose=False)
 
         log.append(log_entry)
         
-        sys.exit()
 
 
 
