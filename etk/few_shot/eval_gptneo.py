@@ -21,6 +21,7 @@ prompt_length = 756
 
 filename = sys.argv[1]
 
+
 prompt = open("gsm8k_prompt.txt", "r").read()
 
 dataset = sys.argv[2]
@@ -51,7 +52,6 @@ for batch in tqdm(dataloader):
 
     prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
 
-
     outputs = model.generate(**encoded_texts, 
                              do_sample=True, 
                              temperature=temp, 
@@ -65,6 +65,7 @@ for batch in tqdm(dataloader):
 
     for text, task_id, label, outs, prompt_len in zip(texts, 
             task_ids, labels, outputs, prompt_lens): 
+
 
         log_entry, _ = tokens_to_gsm8k_log_entry(outs, 
                                                   label,
