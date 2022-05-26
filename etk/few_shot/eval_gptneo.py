@@ -12,14 +12,14 @@ from etk.execution import semisafe_evaluate
 
 device = f"cuda:{sys.argv[1]}"
 
-inference_batch_size = 3
+inference_batch_size = 1
 max_new_tokens = 150
 num_samples = 20
 temp = 0.4
-prompt_length = 500
+prompt_length = 756
 
 
-filename = "gptneo_gsm8k_full_pass20"
+filename = "gptneo-tmp"
 
 prompt = open("gsm8k_prompt.txt", "r").read()
 
@@ -28,7 +28,6 @@ train_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
 dataloader = batch_loader(train_data, inference_batch_size)
 
 tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
-tokenizer.pad_token = tokenizer.eos_token
 tokenizer.truncation_side='left'
 model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B").to(device)
 
@@ -45,11 +44,9 @@ for batch in tqdm(dataloader):
                           return_tensors="pt", 
                           max_length = prompt_length, 
                           truncation=True,
-                          padding='max_length', 
                           ).to(device)
 
     prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
-
 
     outputs = model.generate(**encoded_texts, 
                              do_sample=True, 
@@ -65,7 +62,7 @@ for batch in tqdm(dataloader):
     for text, task_id, label, outs, prompt_len in zip(texts, task_ids, labels, outputs, prompt_lens): 
 
         bodies = gptneo_tokens_to_programs(outs, prompt_len, tokenizer)
-
+        #[print("OUTPUT:\n", text + body) for body in bodies]
         answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
         passed_lst = [(abs(answer-label)/max(label, 1e-5))<0.01
                 if isinstance(answer, float) else False

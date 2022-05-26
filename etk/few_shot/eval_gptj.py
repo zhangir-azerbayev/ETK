@@ -27,7 +27,6 @@ train_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
 dataloader = batch_loader(train_data, inference_batch_size)
 
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-j-6B")
-# tokenizer.pad_token_id = 50270
 tokenizer.truncation_side='left'
 
 torch.cuda.empty_cache()
@@ -52,7 +51,6 @@ for batch in tqdm(dataloader):
                           return_tensors="pt", 
                           max_length = prompt_length, 
                           truncation=True,
-                        #   padding='max_length', 
                           ).to(device)
 
     prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
