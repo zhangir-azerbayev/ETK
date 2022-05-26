@@ -70,8 +70,7 @@ os.mkdir(results_dir)
 
 # Configures tokenizer and data
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-tokenizer.eos_token = '<|endoftext|>'
-tokenizer.pad_token = '<|endoftext|>'
+tokenizer.pad_token = tokenizer.eos_token
 
 dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length)
 

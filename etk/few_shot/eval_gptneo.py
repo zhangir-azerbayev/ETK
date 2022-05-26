@@ -10,12 +10,12 @@ from etk.data.mathqa_dataset import read_gsm8k
 from etk.eval_utils import batch_loader, tokens_to_gsm8k_log_entry#gptneo_tokens_to_log_entry
 from etk.execution import semisafe_evaluate
 
-device = f"cuda:0"
+device = "cuda:1"
 
 inference_batch_size = 1
 max_new_tokens = 150
-num_samples = 20
-temp = 0.4
+num_samples = 100
+temp = 0.6
 prompt_length = 756
 
 
@@ -23,7 +23,8 @@ filename = sys.argv[1]
 
 prompt = open("gsm8k_prompt.txt", "r").read()
 
-train_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
+dataset = sys.argv[2]
+train_data = read_gsm8k(f"../data/gsm8k/gsm8k_{dataset}.jsonl")
 
 dataloader = batch_loader(train_data, inference_batch_size)
 
