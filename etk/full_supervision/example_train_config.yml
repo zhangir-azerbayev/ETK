@@ -1,11 +1,12 @@
 devices: "1"
-experiment_name: "codex_teacher_pass20_incoder1B_student"
+experiment_name: "codex_teacher_pass20_2B_student"
 teacher_data_path: "../few_shot/results/codex_gsm8k_full_pass20.json"
 lr: 2.e-5
 epochs: 50
 batch_size: 8
 weight_decay: 0.01
-model_name: "facebook/incoder-1B"
+model_name: "EleutherAI/gpt-neo-2.7B"
+model_type: "gptneo"
 max_length: 400
 
 

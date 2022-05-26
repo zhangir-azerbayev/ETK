@@ -30,8 +30,9 @@ def gptneo_tokens_to_gsm8k_programs(outs, input_length, tokenizer, verbose=False
     input_length: length of prompt in tokens
     tokenizer: 
     """
+
     generated_ids = [ids[input_length:] for ids in outs]
-    untrunced_bodies = [tokenizer.decode(sample, skip_specials_tokens=False)
+    untrunced_bodies = [tokenizer.decode(sample, skip_special_tokens=False)
             for sample in generated_ids]
     
     if verbose: 
@@ -110,6 +111,12 @@ def tokens_to_gsm8k_log_entry(outs,
         print("#"*40)
         print("text: ")
         print(text)
+ 
+    if verbose: 
+        for x in outs: 
+            print("#"*40)
+            print("raw decoded outputs")
+            print(tokenizer.decode(x, skip_special_tokens=False))
 
     if model_type=="gptneo": 
         bodies = gptneo_tokens_to_gsm8k_programs(outs, 

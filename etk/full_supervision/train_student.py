@@ -27,10 +27,20 @@ def load_trainset_from_log(path, tokenizer, max_length):
 
     return dataset
 
-def data_collator(data):
+def gptneo_data_collator(data):
     return {'input_ids': torch.stack([f[0] for f in data]),
             'attention_mask': torch.stack([f[1] for f in data]),
             'labels': torch.stack([f[0] for f in data])
+           }
+
+def incoder_data_collator(data):
+    """
+    incoder tokenizer puts an eos token at the beginning of 
+    every sequence. 
+    """
+    return {'input_ids': torch.stack([f[0][1:] for f in data]),
+            'attention_mask': torch.stack([f[1][1:] for f in data]),
+            'labels': torch.stack([f[0][1:] for f in data])
            }
 
 
@@ -46,6 +56,13 @@ epochs = cfg["epochs"]
 batch_size = cfg["batch_size"]
 weight_decay = cfg["weight_decay"]
 model_name = cfg["model_name"]
+model_type = cfg["model_type"] 
+if model_type=="gptneo": 
+    data_collator = gptneo_data_collator
+elif model_type=="incoder": 
+    data_collator = incoder_data_collator
+else: 
+    raise ValueError("invalid `model_type`")
 max_length = cfg["max_length"]
 
 results_dir = f"train_results/{experiment_name}"
@@ -53,6 +70,7 @@ os.mkdir(results_dir)
 
 # Configures tokenizer and data
 tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.eos_token = '<|endoftext|>'
 tokenizer.pad_token = '<|endoftext|>'
 
 dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length)
