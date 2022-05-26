@@ -1,0 +1,10 @@
+experiment_name: "codex_teacher_pass100_student_1B_pass10_temp0.2"
+device: "1"
+inference_batch_size: 12
+max_new_tokens: 200
+num_samples: 10
+temp: 0.2
+prompt_length: 200
+model_path: "train_results/codex_teacher_pass100_1B_student/checkpoint-43450/"
+model_type: "gptneo"
+model_name: "EleutherAI/gpt-neo-1.3B"

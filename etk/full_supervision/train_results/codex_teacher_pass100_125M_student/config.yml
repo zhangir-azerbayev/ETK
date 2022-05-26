@@ -1,0 +1,10 @@
+batch_size: 16
+devices: '1'
+epochs: 50
+experiment_name: codex_teacher_pass100_125M_student
+lr: 2.0e-05
+max_length: 400
+model_name: EleutherAI/gpt-neo-125M
+model_type: gptneo
+teacher_data_path: ../few_shot/results/codex_gsm8k_full_pass100.json
+weight_decay: 0.01
