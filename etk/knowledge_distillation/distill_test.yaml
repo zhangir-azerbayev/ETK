@@ -1,0 +1,13 @@
+experiment_name: new-kd-testing
+param_count: 125M
+teacher_param_count: 1.3B
+devices: "2"
+epochs: 50
+max_length: 450 
+batch_size: 8
+optimizer: 
+    lr: 6.0e-5
+    weight_decay: 0.01
+    scheduler_type: exponential 
+    scheduler_kwargs: 
+        gamma: 0.95

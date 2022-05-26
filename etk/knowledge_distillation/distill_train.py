@@ -16,7 +16,9 @@ from transformers import AdamW
 from transformers.integrations import TensorBoardCallback
 from transformers.trainer_pt_utils import get_parameter_names
 
-from data.dataset import read_mathqapython, MathQAPython
+from etk.data.mathqa_dataset import read_gsm8k_with_code, MathQAPython
+from etk.eval_utils import batch_loader, gptneo_tokens_to_programs
+from etk.execution import semisafe_evaluate
 
 config_path = sys.argv[1]
 
@@ -36,11 +38,11 @@ weight_decay = optim['weight_decay']
 scheduler_type = optim['scheduler_type']
 scheduler_kwargs = optim['scheduler_kwargs']
 
-os.mkdir(f"results_train/{experiment_name}/")
+# os.mkdir(f"./results/{experiment_name}/")
 
 print('loading data and configuring tokenizer')
-data = read_mathqapython('data/mathqapython_train.json')
-
+data = read_gsm8k_with_code("../few_shot/results/gptneo_gsm8k_full_pass20.jsonl")
+print(len(data))
 tokenizer = GPT2Tokenizer.from_pretrained(f"EleutherAI/gpt-neo-{param_count}")
 tokenizer.pad_token = tokenizer.eos_token 
 
@@ -75,11 +77,11 @@ if scheduler_type=="exponential":
     scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
-training_args = TrainingArguments(output_dir=f"./results_train/{experiment_name}",
+training_args = TrainingArguments(output_dir=f"./results/{experiment_name}",
                                   num_train_epochs=epochs,
                                   per_device_train_batch_size=batch_size, 
                                   logging_steps=100,
-                                  save_steps=steps_per_epoch*5,
+                                  save_steps=steps_per_epoch,
                                   warmup_steps = 100, 
                                   )
 
@@ -92,10 +94,10 @@ def data_collator(data):
 tb_writer = SummaryWriter(log_dir=f"./results_train/{experiment_name}/tb_log")
 tb_callback = TensorBoardCallback(tb_writer)
 
-with open(f"./results_train/{experiment_name}/config.yml", "w") as f: 
+with open(f"./results/{experiment_name}/config.yml", "w+") as f: 
     yaml.dump(cfg, f)
 
-
+print("loading teacher model")
 teacher = GPTNeoForCausalLM.from_pretrained(f"EleutherAI/gpt-neo-{teacher_param_count}").eval()
 
 class DistilTrainer(Trainer):
@@ -145,7 +147,7 @@ class DistilTrainer(Trainer):
 
 
 
-
+print("starting training")
 DistilTrainer(teacher=teacher, model=model, args=training_args, train_dataset=train_set, 
         data_collator=data_collator, callbacks=[tb_callback], 
         optimizers = (optimizer, scheduler)).train()
