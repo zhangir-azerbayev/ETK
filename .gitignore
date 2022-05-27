@@ -1,3 +1,5 @@
+# sql stuff
+database/*
 # model weights
 *.pt
 *.pth
