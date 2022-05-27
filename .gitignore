@@ -1,5 +1,7 @@
 # sql stuff
 *database/**
+*.sql
+*.sqlite
 # model weights
 *.pt
 *.pth
