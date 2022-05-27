@@ -1,5 +1,5 @@
 # sql stuff
-database/*
+*database/**
 # model weights
 *.pt
 *.pth
