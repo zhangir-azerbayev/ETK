@@ -1,20 +1,27 @@
 import json 
 import sys 
 from tqdm import tqdm
+import random 
 
 import torch
 
 from transformers import GPTNeoForCausalLM, GPT2Tokenizer
+import transformers
 
 from etk.data.mathqa_dataset import read_gsm8k
 from etk.eval_utils import batch_loader, tokens_to_gsm8k_log_entry#gptneo_tokens_to_log_entry
 from etk.execution import semisafe_evaluate
 
+random.seed(20)
+torch.manual_seed(20)
+transformers.set_seed(20)
+
 device = "cuda:1"
 
-inference_batch_size = 1
+# I'm not sure that inference_batch_size > 1 works
+inference_batch_size = 1/2
 max_new_tokens = 150
-num_samples = 100
+num_samples = 50
 temp = 0.6
 prompt_length = 756
 
@@ -26,14 +33,14 @@ prompt = open("gsm8k_prompt.txt", "r").read()
 dataset = sys.argv[2]
 train_data = read_gsm8k(f"../data/gsm8k/gsm8k_{dataset}.jsonl")
 
-dataloader = batch_loader(train_data, inference_batch_size)
+dataloader = batch_loader(train_data, max(inference_batch_size, 1))
 
-tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
+tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-2.7B")
 # tokenizer.pad_token = tokenizer.eos_token
 tokenizer.truncation_side='left'
-model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B").to(device)
+model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-2.7B").to(device)
 
-for batch in tqdm(dataloader): 
+for batch in tqdm(dataloader[5442:]): 
     labels = [instance.answer for instance in batch]
     prompts = [prompt + instance.text for instance in batch]
     texts = [instance.text for instance in batch]
@@ -51,15 +58,29 @@ for batch in tqdm(dataloader):
 
     prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
 
-
+    num_forward_passes = max(int(1/inference_batch_size), 1)
+    
     outputs = model.generate(**encoded_texts, 
                              do_sample=True, 
                              temperature=temp, 
                              max_new_tokens=max_new_tokens,
-                             num_return_sequences=num_samples,
+                             num_return_sequences=num_samples//num_forward_passes,
                              pad_token_id=tokenizer.eos_token_id
                              )
-    
+
+    if inference_batch_size < 1: 
+
+        for _ in range(1, num_forward_passes): 
+            to_concat = model.generate(**encoded_texts, 
+                             do_sample=True, 
+                             temperature=temp, 
+                             max_new_tokens=max_new_tokens,
+                             num_return_sequences=num_samples//num_forward_passes,
+                             pad_token_id=tokenizer.eos_token_id,
+                             )
+
+            outputs = torch.cat((outputs, to_concat), dim=0)
+
 
     outputs = torch.reshape(outputs, (batch_length, num_samples, -1))
 
