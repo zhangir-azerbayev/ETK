@@ -1,0 +1,15 @@
+devices: "3"
+experiment_name: "testing-eval"
+teacher_data_path: "../few_shot/results/gpt-j-filtered-pass20.json"
+lr: 2.e-5
+epochs: 50
+batch_size: 8
+eval_batch_size: 1
+weight_decay: 0.01
+model_name: "EleutherAI/gpt-neo-1.3B"
+model_type: "gptneo"
+max_length: 400
+max_gen_tokens: 150
+num_samples: 10
+temp: 0.2
+
