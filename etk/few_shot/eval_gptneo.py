@@ -28,6 +28,7 @@ prompt_length = 756
 
 filename = sys.argv[1]
 
+
 prompt = open("gsm8k_prompt.txt", "r").read()
 
 dataset = sys.argv[2]
@@ -86,6 +87,7 @@ for batch in tqdm(dataloader[5442:]):
 
     for text, task_id, label, outs, prompt_len in zip(texts, 
             task_ids, labels, outputs, prompt_lens): 
+
 
         log_entry, _ = tokens_to_gsm8k_log_entry(outs, 
                                                   label,
