@@ -138,17 +138,18 @@ class TrainerWithEval(Seq2SeqTrainer):
             task_ids = [instance.task_id for instance in batch]
 
             batch_length = len(texts)
-
+            tokenizer.padding_side = "left"
             encoded_texts = tokenizer(texts, 
                                 return_tensors="pt", 
                                 max_length=max_length, 
                                 truncation=True,
-                                padding='max_length', 
+                                # padding='max_length', 
                                 ).to("cuda")
-
+            tokenizer.padding_side = "right"
             prompt_lens = [torch.sum(x) for x in encoded_texts["attention_mask"]]
 
-            outputs = model.generate(**encoded_texts, 
+            outputs = model.generate(input_ids=encoded_texts["input_ids"], 
+                                    attention_mask=encoded_texts["attention_mask"], 
                                     do_sample=True, 
                                     temperature=temp, 
                                     max_new_tokens=cfg["max_gen_tokens"],
