@@ -12,17 +12,29 @@ import torch
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
 
+import transformers
 from transformers import GPTNeoForCausalLM, GPT2Tokenizer, AutoModelForCausalLM, AutoTokenizer
 from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer 
 from transformers import AdamW
 from transformers.trainer_pt_utils import get_parameter_names
 
-def load_trainset_from_log(path, tokenizer, max_length): 
+def load_trainset_from_log(path, 
+                           tokenizer, 
+                           max_length, 
+                           train_on_dev = False): 
     with open(path, "r") as f: 
         result = json.load(f)
 
     log = result["log"]
 
+    if not train_on_dev: 
+        # Filters dev set
+        with open("../data/gsm8k/dev_idxs.json") as f: 
+            dev_idxs = json.load(f)
+
+        log = [x for x in log if x["task_id"] not in dev_idxs]
+    
+    # Filters out examples with no solutions
     filtered_log = [x for x in log if True in x["passed_lst"]]
 
     dataset = MathQATrainSet(filtered_log, tokenizer, max_length)
@@ -72,6 +84,7 @@ max_length = cfg["max_length"]
 max_generation_length = cfg["max_gen_tokens"] + cfg["max_length"]
 num_samples = cfg["num_samples"]
 temp = cfg["temp"]
+train_on_dev = cfg["train_on_dev"]
 
 results_dir = f"train_results/{experiment_name}"
 os.mkdir(results_dir)
@@ -80,7 +93,8 @@ os.mkdir(results_dir)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 
-dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length)
+dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length, 
+        train_on_dev)
 eval_dataset = read_gsm8k("../data/gsm8k/gsm8k_dev.jsonl")
 
 #Loads model
@@ -102,24 +116,29 @@ optimizer_grouped_parameters = [
     },
 ]
 
+steps_per_epoch = math.ceil(len(dataset)/batch_size)
 optimizer = AdamW(optimizer_grouped_parameters, lr=lr)
-scheduler = LambdaLR(optimizer, lr_lambda = lambda x: 1)
+scheduler = transformers.get_linear_schedule_with_warmup(optimizer, 
+                                                         100, 
+                                                         epochs*steps_per_epoch, 
+                                                         )
+
+                                                        
 
 
 # Configure training
 with open(os.path.join(results_dir, "config.yml"), "w") as f: 
     yaml.dump(cfg, f)
 
-steps_per_epoch = math.ceil(len(dataset)/batch_size)
 training_args = Seq2SeqTrainingArguments(output_dir=results_dir,
                                   num_train_epochs=epochs,
                                   evaluation_strategy="epoch",
                                   per_device_train_batch_size=batch_size,
                                   per_device_eval_batch_size=eval_batch_size,
-                                  logging_steps=steps_per_epoch*5,
-                                  save_steps=steps_per_epoch*5,
-                                  warmup_steps=100,
+                                  logging_steps=steps_per_epoch*4,
+                                  save_steps=steps_per_epoch*4,
                                   remove_unused_columns=False,
+                                  max_grad_norm=1.0,
                                   )
 
 class TrainerWithEval(Seq2SeqTrainer):
