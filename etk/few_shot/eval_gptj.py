@@ -7,14 +7,14 @@ import torch
 from transformers import AutoTokenizer, GPTJForCausalLM, AutoModelForCausalLM
 
 from etk.data.mathqa_dataset import read_gsm8k
-from etk.eval_utils import batch_loader, gptneo_tokens_to_programs
+from etk.eval_utils import batch_loader, gptneo_tokens_to_gsm8k_programs
 from etk.execution import semisafe_evaluate
 
 device = f"cuda:0"
 
 inference_batch_size = 1
 max_new_tokens = 150
-num_samples = 10
+num_samples = 2
 temp = float(sys.argv[1])
 prompt_length = 756
 
@@ -22,7 +22,8 @@ filename = sys.argv[2]
 
 prompt = open("gsm8k_prompt.txt", "r").read()
 
-train_data = read_gsm8k("../data/gsm8k/gsm8k_train.jsonl")
+split = sys.argv[3]
+train_data = read_gsm8k(f"../data/gsm8k/gsm8k_{split}.jsonl")
 
 dataloader = batch_loader(train_data, inference_batch_size)
 
@@ -77,8 +78,8 @@ for batch in tqdm(dataloader):
     # print(outputs.shape)
     for text, task_id, label, outs, prompt_len in zip(texts, task_ids, labels, outputs, prompt_lens): 
 
-        bodies = gptneo_tokens_to_programs(outs, prompt_len, tokenizer)
-        [print("OUTPUT:\n"+body) for body in bodies]
+        bodies = gptneo_tokens_to_gsm8k_programs(outs, prompt_len, tokenizer)
+        #[print("OUTPUT:\n"+body) for body in bodies]
         answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
         passed_lst = [(abs(answer-label)/max(label, 1e-5))<0.01
                 if isinstance(answer, float) else False

@@ -16,13 +16,13 @@ random.seed(20)
 torch.manual_seed(20)
 transformers.set_seed(20)
 
-device = "cuda:1"
+device = "cuda:5"
 
 # I'm not sure that inference_batch_size > 1 works
-inference_batch_size = 1/2
+inference_batch_size = 1
 max_new_tokens = 150
-num_samples = 50
-temp = 0.6
+num_samples = 10
+temp = 0.2
 prompt_length = 756
 
 
@@ -36,12 +36,12 @@ train_data = read_gsm8k(f"../data/gsm8k/gsm8k_{dataset}.jsonl")
 
 dataloader = batch_loader(train_data, max(inference_batch_size, 1))
 
-tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-2.7B")
+tokenizer = GPT2Tokenizer.from_pretrained("EleutherAI/gpt-neo-125M")
 # tokenizer.pad_token = tokenizer.eos_token
 tokenizer.truncation_side='left'
-model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-2.7B").to(device)
+model = GPTNeoForCausalLM.from_pretrained("EleutherAI/gpt-neo-125M").to(device)
 
-for batch in tqdm(dataloader[5442:]): 
+for batch in tqdm(dataloader): 
     labels = [instance.answer for instance in batch]
     prompts = [prompt + instance.text for instance in batch]
     texts = [instance.text for instance in batch]
