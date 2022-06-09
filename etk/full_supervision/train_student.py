@@ -152,6 +152,8 @@ class TrainerWithEval(Seq2SeqTrainer):
     def evaluate(self, eval_dataset=None, **kwargs):
         "Overrides the regular Seq2SeqTrainer.evaluate() since do_sample cannot be set via a training argument."
         print("Validating...")
+        self._memory_tracker.start()
+
         log = []
         eval_dataset = self.eval_dataset
         dataloader = batch_loader(eval_dataset, self.args.per_device_eval_batch_size) 
@@ -202,8 +204,15 @@ class TrainerWithEval(Seq2SeqTrainer):
         num_passed = sum([x["passk"] for x in log])
         pass_k = num_passed/num_examples
         pass_1 = sum([x["pass1"] for x in log])/num_examples
-        print(f"pass@{num_samples}: {pass_k}\n")
-        return {f"pass@{num_samples}": pass_k}
+
+        to_log = {f"pass@{num_samples}": pass_k}
+        self.log(to_log)
+
+        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, to_log)
+
+        self._memory_tracker.stop_and_update_metrics(to_log)
+
+        return to_log
     
 
 # Runs training 

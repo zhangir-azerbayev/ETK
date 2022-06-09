@@ -1,0 +1,16 @@
+batch_size: 8
+devices: '1'
+epochs: 2
+eval_batch_size: 1
+experiment_name: test_and_delete
+gradient_accumulation_steps: 1
+lr: 0.0001
+max_gen_tokens: 150
+max_length: 400
+model_name: EleutherAI/gpt-neo-125M
+model_type: gptneo
+num_samples: 2
+teacher_data_path: ../few_shot/results/gptneo2B_gsm8k_full_pass100.json
+temp: 0.2
+train_on_dev: false
+weight_decay: 0.1

@@ -1,9 +1,9 @@
-devices: "1"
-experiment_name: "gptneo2B_teacher_pass100_gptneo125M_student_with_validation_new_hparams"
+devices: "1,2"
+experiment_name: "test_and_delete1"
 teacher_data_path: "../few_shot/results/gptneo2B_gsm8k_full_pass100.json"
 lr: 1.e-4
-epochs: 140
-batch_size: 16
+epochs: 2
+batch_size: 7
 gradient_accumulation_steps: 2
 eval_batch_size: 1
 weight_decay: 0.1
@@ -11,7 +11,7 @@ model_name: "EleutherAI/gpt-neo-125M"
 model_type: "gptneo"
 max_length: 400
 max_gen_tokens: 150
-num_samples: 10
+num_samples: 2
 temp: 0.2
 train_on_dev: false 
 
