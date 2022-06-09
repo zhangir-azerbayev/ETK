@@ -69,6 +69,7 @@ teacher_data_path = cfg["teacher_data_path"]
 lr = cfg["lr"]
 epochs = cfg["epochs"]
 batch_size = cfg["batch_size"]
+grad_accum=cfg["gradient_accumulation_steps"]
 eval_batch_size = cfg["eval_batch_size"]
 weight_decay = cfg["weight_decay"]
 model_name = cfg["model_name"]
@@ -116,7 +117,8 @@ optimizer_grouped_parameters = [
     },
 ]
 
-steps_per_epoch = math.ceil(len(dataset)/batch_size)
+num_gpus = torch.cuda.device_count()
+steps_per_epoch = math.ceil(len(dataset)/(batch_size*num_gpus*grad_accum))
 optimizer = AdamW(optimizer_grouped_parameters, lr=lr)
 scheduler = transformers.get_linear_schedule_with_warmup(optimizer, 
                                                          100, 
@@ -132,13 +134,15 @@ with open(os.path.join(results_dir, "config.yml"), "w") as f:
 
 training_args = Seq2SeqTrainingArguments(output_dir=results_dir,
                                   num_train_epochs=epochs,
-                                  evaluation_strategy="epoch",
+                                  evaluation_strategy="steps",
+                                  eval_steps=steps_per_epoch*10,
                                   per_device_train_batch_size=batch_size,
                                   per_device_eval_batch_size=eval_batch_size,
-                                  logging_steps=steps_per_epoch*4,
-                                  save_steps=steps_per_epoch*4,
+                                  logging_steps=steps_per_epoch*10,
+                                  save_steps=steps_per_epoch*10,
                                   remove_unused_columns=False,
                                   max_grad_norm=1.0,
+                                  gradient_accumulation_steps=grad_accum,
                                   )
 
 class TrainerWithEval(Seq2SeqTrainer):
