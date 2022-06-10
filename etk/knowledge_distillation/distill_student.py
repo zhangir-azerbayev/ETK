@@ -1,5 +1,6 @@
 import sys 
 import os
+import gc
 import yaml 
 import math
 import json
@@ -35,30 +36,11 @@ def load_trainset_from_log(path,
     log = result["log"]
 
     log = [x for x in log if True in x["passed_lst"]]
-    # print(len(log))
-
-    # paste logits into data points
-    # print("Loading logits...")
-    # print("loading logits_to0.pt...")
-    # curr_logits_file = torch.load(os.path.join(teacher_logits_path, "logits_to0.pt"))
-    # print(curr_logits_file.shape)
-    # idx = 0
+   
     for idx, entry in enumerate(log):
         # print(task_id, idx)
         entry["idx"] = idx # preserve original idx within logits files
-        # entry["teacher_logits"] = curr_logits_file[idx,:,:,:]
-        # idx += 1
         
-        # if (task_id % 100 == 0):
-        #     idx = 0
-
-            # curr_logits_file = None
-            # torch.cuda.empty_cache()
-
-            # curr_logits_file = torch.load(os.path.join(teacher_logits_path, "logits_to{}.pt".format(task_id+100)))
-            # print("loaded logits_to{}.pt".format(task_id+100))
-        
-    # TODO: keep track of what the "index" of the log entry is (post-filtering by solved, pre-filtering out dev set), so we can load the correct logits file
 
     if not train_on_dev: 
         # Filters dev set
@@ -184,19 +166,7 @@ class DistilTrainer(Seq2SeqTrainer):
         idxs = inputs["idx"]
         inputs.pop("idx")
         # print(idxs)
-        t_logits = None
-        for idx in idxs:
-            ex_logits = torch.load(os.path.join(teacher_logits_path, "logits_to{}.pt".format(idx)))
-            if t_logits is None:
-                t_logits = ex_logits
-            else:
-                t_logits = torch.cat((t_logits, ex_logits), dim=0)
-            ex_logits = None
-        ex_logits = None
-        # print(t_logits.shape)
-
-        # t_logits = inputs["teacher_logits"]
-        # inputs.pop("teacher_logits")
+        
         student_logits = model(**inputs)
         loss_CLM = student_logits.loss
         s_logits = student_logits.logits
@@ -207,6 +177,17 @@ class DistilTrainer(Seq2SeqTrainer):
         mask = (inputs["attention_mask"] > 0).unsqueeze(-1).expand_as(s_logits) 
         s_logits_slct = torch.masked_select(s_logits, mask)  
         s_logits_slct = s_logits_slct.view(-1, s_logits.size(-1))
+
+        t_logits = None
+        for idx in idxs:
+            ex_logits = torch.load(os.path.join(teacher_logits_path, "logits_to{}.pt".format(idx))).to(mask.device)
+            if t_logits is None:
+                t_logits = ex_logits
+            else:
+                t_logits = torch.cat((t_logits, ex_logits), dim=0)
+            del ex_logits
+            ex_logits = None
+        ex_logits = None
 
         t_logits = t_logits.to(mask.device)
         t_logits_slct = torch.masked_select(t_logits, mask)
@@ -223,9 +204,18 @@ class DistilTrainer(Seq2SeqTrainer):
         loss = loss_CE + loss_CLM
         # print(loss)
 
+        del t_logits
+        del t_logits_slct
+        del mask
         t_logits = None
         t_logits_slct = None
+        mask = None
+        # del s_logits
+        # del s_logits_slct
+        # s_logits = None
+        # s_logits_slct = None
         torch.cuda.empty_cache()
+        
         return (loss, student_logits) if return_outputs else loss
 
     def evaluate(self, eval_dataset=None, **kwargs):
