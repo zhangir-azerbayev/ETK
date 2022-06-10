@@ -1,0 +1,16 @@
+batch_size: 8
+devices: '1'
+epochs: 140
+eval_batch_size: 1
+experiment_name: gptneo2B_teacher_pass100_gptneo1B_student_validation_standard_params
+gradient_accumulation_steps: 4
+lr: 0.0001
+max_gen_tokens: 150
+max_length: 400
+model_name: EleutherAI/gpt-neo-1.3B
+model_type: gptneo
+num_samples: 10
+teacher_data_path: ../few_shot/results/gptneo2B_gsm8k_full_pass100.json
+temp: 0.2
+train_on_dev: false
+weight_decay: 0.1
