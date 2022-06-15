@@ -85,12 +85,14 @@ max_length = cfg["max_length"]
 max_generation_length = cfg["max_gen_tokens"] + cfg["max_length"]
 num_samples = cfg["num_samples"]
 temp = cfg["temp"]
+do_train = cfg["do_train"]
 train_on_dev = cfg["train_on_dev"]
 
 results_dir = f"train_results/{experiment_name}"
 os.mkdir(results_dir)
 
 # Configures tokenizer and data
+print("REMOVE TRAIN FROM CHECKPOINT STUFF")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 
@@ -99,7 +101,7 @@ dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length,
 eval_dataset = read_gsm8k("../data/gsm8k/gsm8k_dev.jsonl")
 
 #Loads model
-model = AutoModelForCausalLM.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name if do_train else model_path)
 
 # Optimizer 
 decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
@@ -118,7 +120,7 @@ optimizer_grouped_parameters = [
 ]
 
 num_gpus = torch.cuda.device_count()
-steps_per_epoch = math.ceil(len(dataset)/(batch_size*num_gpus*grad_accum))
+steps_per_epoch = math.floor(len(dataset)/(batch_size*num_gpus*grad_accum))
 optimizer = AdamW(optimizer_grouped_parameters, lr=lr)
 scheduler = transformers.get_linear_schedule_with_warmup(optimizer, 
                                                          100, 
@@ -175,8 +177,8 @@ class TrainerWithEval(Seq2SeqTrainer):
 
             outputs = model.generate(input_ids=encoded_texts["input_ids"], 
                                     attention_mask=encoded_texts["attention_mask"], 
-                                    do_sample=True, 
-                                    temperature=temp, 
+                                    do_sample=not temp==0, 
+                                    temperature=None if temp==0 else temp, 
                                     max_new_tokens=cfg["max_gen_tokens"],
                                     num_return_sequences=num_samples,
                                     pad_token_id=tokenizer.eos_token_id
@@ -206,6 +208,7 @@ class TrainerWithEval(Seq2SeqTrainer):
         pass_1 = sum([x["pass1"] for x in log])/num_examples
 
         to_log = {f"pass@{num_samples}": pass_k}
+        print(to_log)
         self.log(to_log)
 
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, to_log)
@@ -215,8 +218,15 @@ class TrainerWithEval(Seq2SeqTrainer):
         return to_log
     
 
-# Runs training 
-TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
-        eval_dataset=eval_dataset,
-        data_collator=data_collator,
-        optimizers=(optimizer, scheduler)).train()
+# Runs training or validation! 
+if do_train: 
+    TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
+            eval_dataset=eval_dataset,
+            data_collator=data_collator,
+            optimizers=(optimizer, scheduler)).train()
+else: 
+    TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
+            eval_dataset=eval_dataset,
+            data_collator=data_collator,
+            optimizers=(optimizer, scheduler)).evaluate()
+
