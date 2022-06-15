@@ -73,6 +73,7 @@ grad_accum=cfg["gradient_accumulation_steps"]
 eval_batch_size = cfg["eval_batch_size"]
 weight_decay = cfg["weight_decay"]
 model_name = cfg["model_name"]
+model_path = cfg["model_path"]
 model_type = cfg["model_type"] 
 if model_type=="gptneo": 
     data_collator = gptneo_data_collator
@@ -92,7 +93,6 @@ results_dir = f"train_results/{experiment_name}"
 os.mkdir(results_dir)
 
 # Configures tokenizer and data
-print("REMOVE TRAIN FROM CHECKPOINT STUFF")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 
