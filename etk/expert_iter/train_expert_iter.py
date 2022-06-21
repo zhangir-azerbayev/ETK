@@ -1,257 +1,169 @@
 import sys 
 import os
 import yaml 
-import json
 import math
-import random
-import re
-import glob
-
+import json
 from tqdm import tqdm
+
+from etk.data.mathqa_dataset import MathQATrainSet, read_gsm8k
+from etk.eval_utils import tokens_to_gsm8k_log_entry, batch_loader
 
 import torch 
 import torch.nn
 from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.tensorboard import SummaryWriter 
-from torch.utils.data import DataLoader, SequentialSampler, BatchSampler
 
-from transformers import GPTNeoForCausalLM, GPT2Tokenizer 
-from transformers import TrainingArguments, Trainer 
+import transformers
+from transformers import GPTNeoForCausalLM, GPT2Tokenizer, AutoModelForCausalLM, AutoTokenizer
+from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer 
 from transformers import AdamW
-from transformers.integrations import TensorBoardCallback
 from transformers.trainer_pt_utils import get_parameter_names
 
-from cl.data.dataset import read_mathqapython, MathQAPython
+prompt = ["You are a world renowned philosopher. This your seminal treatise on formal epistemology:", "You are a mediocre psychologist. here is one of your papers:"]
 
-from cl.execution import semisafe_evaluate
+def load_trainset_from_log(result, 
+                           tokenizer, 
+                           train_max_length, 
+                           train_on_dev = False): 
+    """
+    log dictionary formatted exactly as before
+    """
 
-def change_code(instance, code): 
-    instance.set_code(code)
-    return instance
+    log = result["log"]
 
+    if not train_on_dev: 
+        # Filters dev set
+        with open("../data/gsm8k/dev_idxs.json") as f: 
+            dev_idxs = json.load(f)
 
-def train_model(model, tokenizer, labelled_examples, training_run_name, cfg):
-
-    train_set = MathQAPython(labelled_examples, tokenizer, cfg["max_length"])
-
-
-    decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
-    decay_parameters = [name for name in decay_parameters if "bias" not in name]
-    optimizer_grouped_parameters = [
-        {
-            "params": [p for n, p in model.named_parameters() if n in decay_parameters],
-            "weight_decay": cfg["weight_decay"],
-        },
-        {
-            "params": [p for n, p in model.named_parameters() if n not in decay_parameters],
-            "weight_decay": 0.0,
-        },
-    ]
+        log = [x for x in log if x["task_id"] not in dev_idxs]
     
-    optimizer = AdamW(optimizer_grouped_parameters, lr=2e-5)
-    lr_lambda = lambda step: 1
-    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+    # Filters out examples with no solutions
+    filtered_log = [x for x in log if True in x["passed_lst"]]
+
+    dataset = MathQATrainSet(filtered_log, tokenizer, max_length)
+
+    return dataset
 
 
-    experiment_name = cfg["experiment_name"]
-    steps_per_epoch = len(train_set)//cfg["train_batch_size"] + 1
+class WrappedModel(torch.nn.Module): 
+    def __init__(self, model, param_dict): 
+        super().__init__()
+        self.model = model 
+        self.gen_params = param_dict
 
-    training_args = TrainingArguments(output_dir=f"./results_train/{experiment_name}/MLElogs/{training_run_name}",
-                                      num_train_epochs=cfg["epochs"],
-                                      per_device_train_batch_size=cfg["train_batch_size"], 
-                                      logging_steps=steps_per_epoch,
-                                      save_steps=cfg["epochs"]*steps_per_epoch,
-                                      )
-
-    def data_collator(data):
-        return {'input_ids': torch.stack([f[0] for f in data]),
-                'attention_mask': torch.stack([f[1] for f in data]), 
-                'labels': torch.stack([f[0] for f in data])
-               }
-
-    print(f"###############{training_run_name}#################")
-    Trainer(model=model, args=training_args, train_dataset=train_set, 
-            data_collator=data_collator, 
-            optimizers=(optimizer, scheduler)).train()
-
-    return model 
-
-def tokens_to_programs(outs, input_length, tokenizer): 
-    generated_ids = [ids[input_length:] for ids in outs]
-    untrunced_bodies = [tokenizer.decode(sample, skip_specials_tokens=False)
-            for sample in generated_ids]
-
-    untrunced_bodies = [x.replace("<|endoftext|>", "") for x in untrunced_bodies]
-
-    re_key = '^answer.*?\n'
-
-    bodies = [completion[:re.search(re_key, completion).span()[1]]
-        if re.search(re_key, completion) else completion
-        for completion in untrunced_bodies]
-
-    return bodies
+    def forward(self, x, y): 
+        return self.model.generate(input_ids=x, attention_mask=y, **self.gen_params)
 
 
-"""
-solved is a set of indices
-solutions is an array
-"""
-def update_solved(model, 
-                  tokenizer,
-                  solved, 
-                  solutions, 
-                  train_set, 
-                  temp, 
-                  cfg,
-                  ): 
-    print("#############Updating S_k#################")
-    max_text_length = 200
-    max_new_tokens = 150
-    device = "cuda" # "cuda:" + cfg["devices"]
-    print("device ordinal: ", device)
+def evaluate(model, 
+             tokenizer, 
+             eval_dataset, 
+             few_shot, 
+             input_max_length, 
+             output_max_length, 
+             device_list, 
+             temp, 
+             inference_batch_size, 
+             num_samples
+             ): 
+    """
+    kwargs: 
+    few_shot : Bool
+    input_max_length : int 
+    output_max_length : int
+    tokenizer
+    model
+    device_list : List<int>
+    temp : float
+    num_samples : int
+    inference_batch_size : int
+    eval_dataset : List<MathQAInstance>
+    """
+    first_device = f"cuda:{device_list[0]}"
 
-    fail_log = []
+    model = AutoModelForCausalLM.from_pretrained("/home/lily/zaa7/ETK/etk/full_supervision/train_results/codex_teacher_pass100_gptneo125M_student_validation_pass1_standard_params/checkpoint-28420")
+    wrapped_model = WrappedModel(model, 
+                                   {"do_sample": True, 
+                                    "temperature": temp, 
+                                    "max_new_tokens": output_max_length, 
+                                    "num_return_sequences": num_samples, 
+                                    "pad_token_id": tokenizer.eos_token_id,}
+                                   ).to(first_device)
+    net = wrapped_model
+    net = torch.nn.DataParallel(model, device_ids=device_list)
 
-    inference_dataset = [{"idx": i, 
-                          "text": instance.text, 
-                          "answer": instance.answer}
-                          for i, instance in enumerate(train_set)
-                          if i not in solved]
-
- 
-    dataloader = DataLoader(inference_dataset, 
-            batch_size=cfg["inference_batch_size"], drop_last=False)
-
+    dataloader = batch_loader(eval_dataset, inference_batch_size)
+    
+    eval_log = []
     for batch in tqdm(dataloader): 
-        batch_length = len(batch["text"])
-        encoded_texts = tokenizer(batch["text"], return_tensors="pt",
-            max_length=max_text_length, padding='max_length', 
-            truncation=True).to(device)
- 
-        outputs = model.generate(**encoded_texts, 
-                                 do_sample=True, 
-                                 temperature=temp, 
-                                 max_new_tokens = max_new_tokens, 
-                                 pad_token_id=tokenizer.eos_token_id, 
-                                 num_return_sequences = cfg["inference_num_samples"],
-                                )
+        labels = [x.answer for x in batch]
+        prompts = [few_shot_prompt + "\n" + x.text if few_shot else x.text 
+                for x in batch]
+        task_ids = [x.task_id for x in batch]
+        texts = [x.text for x in batch]
 
-        outputs = torch.reshape(outputs, 
-                (batch_length, cfg["inference_num_samples"], -1))
+        batch_length = len(labels)
 
-        for text, idx, label, outs in zip(batch["text"], batch["idx"], batch["answer"], outputs): 
-            bodies = tokens_to_programs(outs, max_text_length, tokenizer)
+        inpt = tokenizer(prompts, 
+                                  return_tensors="pt", 
+                                  max_length=input_max_length, 
+                                  truncation=True, 
+                                  padding='max_length', 
+                                  )#.to(first_device)
 
-            answers = [semisafe_evaluate(program, 'answer', 1) for program in bodies]
+        output = net(inpt["input_ids"], inpt["attention_mask"],)
+        sys.exit()
 
-            passed_lst = [(abs((answer - label.item())/label.item()) < 0.01) 
-                    if isinstance(answer, float) else False 
-                    for answer in answers]
+        trunced_outs = [x[input_max_length:] for x in output]
 
-            if True in passed_lst: 
-                gold_code = bodies[passed_lst.index(True)]
-                solved.add(idx.item())
-                solutions[idx.item()] = gold_code
-            else: 
-                to_log = {"idx": idx.item(), 
-                          "text": text, 
-                          "label": label.item(),
-                          "samples": bodies}
-                fail_log.append(to_log)
+        batched_trunced_outs = batch_loader(trunced_outs, batch_length)
 
-              
-    return solved, solutions, fail_log
+        for tensors, label, task_id, text in zip(batched_trunced_outs, 
+                                                 labels, 
+                                                 task_ids, 
+                                                 texts
+                                                 ): 
+            log_entry = tokens_to_gsm8k_log_entry(tensors, 
+                                                  label, 
+                                                  task_id, 
+                                                  text, 
+                                                  0, 
+                                                  tokenizer,
+                                                  "gptneo", 
+                                                  verbose=True,
+                                                  )
+
+            eval_log.append(log_entry)
+
+    return eval_log
 
 
-                
 def main(): 
-    config_path = sys.argv[1] 
+    device_list = [4,5]
 
-    with open(config_path, "r") as f: 
-        cfg = yaml.safe_load(f)
-
-    experiment_name = cfg['experiment_name']
-    param_count = cfg['param_count']
-    os.environ["CUDA_VISIBLE_DEVICES"] = cfg['devices']
-    device = 'cuda'
-    max_length = cfg['max_length']
-    epochs_per_step = cfg['epochs']
-    inference_batch_size = cfg['inference_batch_size']
-    inference_num_samples = cfg['inference_num_samples']
-    train_batch_size = cfg['train_batch_size']
-    num_iters = cfg['num_iters']
-    from_checkpoint = cfg['from_checkpoint']
-    weight_decay = cfg['weight_decay']
-    num_seeds = cfg['num_seeds']
-
-    results_dir = f"results_train/{experiment_name}"
-    if from_checkpoint == 0: 
-        os.mkdir(results_dir)
-
-    print("loading model...")
-    model_name = f"EleutherAI/gpt-neo-{param_count}"
-    if from_checkpoint > 0: 
-        load_idx = from_checkpoint - 1
-        reg = f"results_train/{experiment_name}/MLElogs/{load_idx}MLE/checkpoint-*"
-        for name in glob.glob(reg): 
-            model = GPTNeoForCausalLM.from_pretrained(name).to(device)
-            print("loaded model path ", name)
-    else: 
-        model = GPTNeoForCausalLM.from_pretrained(model_name).to(device)
-
-    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
     tokenizer.pad_token = tokenizer.eos_token
 
-    # Just doing 3000 examples 
-    max_instances = 3000
-    all_data_list = read_mathqapython('../data/mathqapython_train.json')
-    random.shuffle(all_data_list)
-    all_data_list = all_data_list[:max_instances]
 
-    # Seed with 100 labelled examples 
-    if from_checkpoint > 0: 
-        with open(f"results_train/{experiment_name}/{from_checkpoint-1}_S.json") as f: 
-            slog = json.load(f)
+    eval_dataset = read_gsm8k("../data/gsm8k/gsm8k_dev.jsonl")
 
-        solved = set([x["idx"] for x in slog["solutions"]])
-        solutions = [None for _ in range(max_instances)]
-        for x in slog["solutions"]: 
-            solutions[x["idx"]] = x["solution"]
-    else: 
-        solved = set(random.sample(range(max_instances), num_seeds))
-
-        solutions = [None for _ in range(max_instances)]
-        for i in solved: 
-            solutions[i] = all_data_list[i].code 
-
-
-    for i in range(from_checkpoint, num_iters): 
-        labelled_examples = [change_code(all_data_list[i], solutions[i]) for i in solved]
-
-        model = train_model(model, tokenizer, labelled_examples, f"{i}MLE", cfg)
-
-
-        solved, solutions, fail_log = update_solved(model, 
-                                         tokenizer,
-                                         solved, 
-                                         solutions, 
-                                         all_data_list, 
-                                         temp=0.2, 
-                                         cfg=cfg,
-                                         )
-
-        print("NUMBER SOLVED: ", len(solved))
-
-        
-        with open(f"results_train/{experiment_name}/{i}_S.json", "w") as fle: 
-            json.dump({"num solved": len(solved), 
-                       "solutions": [{"idx": i, "prompt": all_data_list[i].text, "solution": solutions[i]} 
-                                        for i in solved]
-                      }, fle, indent=4)
-
-        with open(f"results_train/{experiment_name}/{i}_fail_log.json", "w") as fle: 
-            json.dump(fail_log, fle, indent=4)
-
+    evaluate(model=None, 
+             tokenizer=tokenizer, 
+             eval_dataset=eval_dataset, 
+             few_shot=False,
+             input_max_length=200, 
+             output_max_length=200, 
+             device_list=[4,5],
+             temp=0.6, 
+             inference_batch_size=len(device_list),
+             num_samples=20, 
+             )
+             
+            
 
 if __name__=="__main__": 
     main()
+
+
+
+
