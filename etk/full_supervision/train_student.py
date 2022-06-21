@@ -58,94 +58,10 @@ def incoder_data_collator(data):
            }
 
 
-config_path = sys.argv[1]
-with open(config_path, "r") as f: 
-    cfg = yaml.safe_load(f)
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["CUDA_VISIBLE_DEVICES"] = cfg["devices"]
-experiment_name = cfg["experiment_name"]
-teacher_data_path = cfg["teacher_data_path"]
-lr = cfg["lr"]
-epochs = cfg["epochs"]
-batch_size = cfg["batch_size"]
-grad_accum=cfg["gradient_accumulation_steps"]
-eval_batch_size = cfg["eval_batch_size"]
-weight_decay = cfg["weight_decay"]
-model_name = cfg["model_name"]
-model_path = cfg["model_path"]
-model_type = cfg["model_type"] 
-if model_type=="gptneo": 
-    data_collator = gptneo_data_collator
-elif model_type=="incoder": 
-    data_collator = incoder_data_collator
-else: 
-    raise ValueError("invalid `model_type`")
-max_length = cfg["max_length"]
-# config values to be used for validation
-max_generation_length = cfg["max_gen_tokens"] + cfg["max_length"]
-num_samples = cfg["num_samples"]
-temp = cfg["temp"]
-do_train = cfg["do_train"]
-train_on_dev = cfg["train_on_dev"]
-
-results_dir = f"train_results/{experiment_name}"
-os.mkdir(results_dir)
-
-# Configures tokenizer and data
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-tokenizer.pad_token = tokenizer.eos_token
-
-dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length, 
-        train_on_dev)
-eval_dataset = read_gsm8k("../data/gsm8k/gsm8k_dev.jsonl")
-
-#Loads model
-model = AutoModelForCausalLM.from_pretrained(model_name if do_train else model_path)
-
-# Optimizer 
-decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
-decay_parameters = [name for name in decay_parameters if "bias" not in name]
-optimizer_grouped_parameters = [
-    {
-        "params": [p for n, p in model.named_parameters() 
-            if n in decay_parameters],
-        "weight_decay": weight_decay,
-    },
-    {
-        "params": [p for n, p in model.named_parameters() 
-            if n not in decay_parameters],
-        "weight_decay": 0.0,
-    },
-]
-
-num_gpus = torch.cuda.device_count()
-steps_per_epoch = math.floor(len(dataset)/(batch_size*num_gpus*grad_accum))
-optimizer = AdamW(optimizer_grouped_parameters, lr=lr)
-scheduler = transformers.get_linear_schedule_with_warmup(optimizer, 
-                                                         100, 
-                                                         epochs*steps_per_epoch, 
-                                                         )
 
                                                         
 
 
-# Configure training
-with open(os.path.join(results_dir, "config.yml"), "w") as f: 
-    yaml.dump(cfg, f)
-
-training_args = Seq2SeqTrainingArguments(output_dir=results_dir,
-                                  num_train_epochs=epochs,
-                                  evaluation_strategy="steps",
-                                  eval_steps=steps_per_epoch*10,
-                                  per_device_train_batch_size=batch_size,
-                                  per_device_eval_batch_size=eval_batch_size,
-                                  logging_steps=steps_per_epoch*10,
-                                  save_steps=steps_per_epoch*10,
-                                  remove_unused_columns=False,
-                                  max_grad_norm=1.0,
-                                  gradient_accumulation_steps=grad_accum,
-                                  )
 
 class TrainerWithEval(Seq2SeqTrainer):
     def __init__(self, *args, **kwargs):
@@ -211,22 +127,115 @@ class TrainerWithEval(Seq2SeqTrainer):
         print(to_log)
         self.log(to_log)
 
+        to_log["log"] = log 
+
+        with open(os.path.join(self.args.output_dir, "generated_programs_log.json"), "w") as f: 
+            json.dump(to_log, f)
+        print("log succesfully saved")
+
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, to_log)
 
         self._memory_tracker.stop_and_update_metrics(to_log)
 
         return to_log
-    
 
-# Runs training or validation! 
-if do_train: 
-    TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
-            eval_dataset=eval_dataset,
-            data_collator=data_collator,
-            optimizers=(optimizer, scheduler)).train()
-else: 
-    TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
-            eval_dataset=eval_dataset,
-            data_collator=data_collator,
-            optimizers=(optimizer, scheduler)).evaluate()
+def main(): 
+    config_path = sys.argv[1]
+    with open(config_path, "r") as f: 
+        cfg = yaml.safe_load(f)
 
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["CUDA_VISIBLE_DEVICES"] = cfg["devices"]
+    experiment_name = cfg["experiment_name"]
+    teacher_data_path = cfg["teacher_data_path"]
+    lr = cfg["lr"]
+    epochs = cfg["epochs"]
+    batch_size = cfg["batch_size"]
+    grad_accum=cfg["gradient_accumulation_steps"]
+    eval_batch_size = cfg["eval_batch_size"]
+    weight_decay = cfg["weight_decay"]
+    model_name = cfg["model_name"]
+    model_path = cfg["model_path"]
+    model_type = cfg["model_type"] 
+    if model_type=="gptneo": 
+        data_collator = gptneo_data_collator
+    elif model_type=="incoder": 
+        data_collator = incoder_data_collator
+    else: 
+        raise ValueError("invalid `model_type`")
+    max_length = cfg["max_length"]
+    # config values to be used for validation
+    max_generation_length = cfg["max_gen_tokens"] + cfg["max_length"]
+    num_samples = cfg["num_samples"]
+    temp = cfg["temp"]
+    do_train = cfg["do_train"]
+    train_on_dev = cfg["train_on_dev"]
+
+    results_dir = f"train_results/{experiment_name}"
+    os.mkdir(results_dir)
+
+    # Configures tokenizer and data
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.pad_token = tokenizer.eos_token
+
+    dataset = load_trainset_from_log(teacher_data_path, tokenizer, max_length, 
+            train_on_dev)
+    eval_dataset = read_gsm8k("../data/gsm8k/gsm8k_dev.jsonl")
+
+    #Loads model
+    model = AutoModelForCausalLM.from_pretrained(model_name if do_train else model_path)
+
+    # Optimizer 
+    decay_parameters = get_parameter_names(model, [torch.nn.LayerNorm])
+    decay_parameters = [name for name in decay_parameters if "bias" not in name]
+    optimizer_grouped_parameters = [
+        {
+            "params": [p for n, p in model.named_parameters() 
+                if n in decay_parameters],
+            "weight_decay": weight_decay,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() 
+                if n not in decay_parameters],
+            "weight_decay": 0.0,
+        },
+    ]
+
+    num_gpus = torch.cuda.device_count()
+    steps_per_epoch = math.floor(len(dataset)/(batch_size*num_gpus*grad_accum))
+    optimizer = AdamW(optimizer_grouped_parameters, lr=lr)
+    scheduler = transformers.get_linear_schedule_with_warmup(optimizer, 
+                                                             100, 
+                                                             epochs*steps_per_epoch, 
+                                                             )
+
+    # Configure training
+    with open(os.path.join(results_dir, "config.yml"), "w") as f: 
+        yaml.dump(cfg, f)
+
+    training_args = Seq2SeqTrainingArguments(output_dir=results_dir,
+                                      num_train_epochs=epochs,
+                                      evaluation_strategy="steps",
+                                      eval_steps=steps_per_epoch*10,
+                                      per_device_train_batch_size=batch_size,
+                                      per_device_eval_batch_size=eval_batch_size,
+                                      logging_steps=steps_per_epoch*10,
+                                      save_steps=steps_per_epoch*10,
+                                      remove_unused_columns=False,
+                                      max_grad_norm=1.0,
+                                      gradient_accumulation_steps=grad_accum,
+                                      )
+    # Runs training or validation! 
+    if do_train: 
+        TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
+                eval_dataset=eval_dataset,
+                data_collator=data_collator,
+                optimizers=(optimizer, scheduler)).train()
+    else: 
+        TrainerWithEval(model=model, args=training_args, train_dataset=dataset,
+                eval_dataset=eval_dataset,
+                data_collator=data_collator,
+                optimizers=(optimizer, scheduler)).evaluate()
+
+if __name__=="__main__":
+    main()
