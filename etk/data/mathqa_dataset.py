@@ -4,10 +4,11 @@ import jsonlines
 from pathlib import Path 
 
 class MathQATrainSet(torch.utils.data.Dataset): 
-    def __init__(self, log_lst, tokenizer, max_length): 
+    def __init__(self, log_lst, tokenizer, max_length, use_teacher=False):
         self.log_lst = log_lst
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.use_teacher = use_teacher
 
     def __getitem__(self, idx): 
         dct = self.log_lst[idx]
@@ -20,7 +21,10 @@ class MathQATrainSet(torch.utils.data.Dataset):
                                           padding='max_length', 
                                           return_tensors="pt"
                                           )
-
+        if self.use_teacher:
+            if "idx" in dct.keys():
+                full_text_encode["idx"] = dct["idx"]
+            return full_text_encode
         ids = full_text_encode['input_ids'].squeeze()
         mask = full_text_encode['attention_mask'].squeeze()
 

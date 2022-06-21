@@ -1,0 +1,18 @@
+batch_size: 1
+devices: '0'
+epochs: 140
+eval_batch_size: 1
+experiment_name: KD_gptj_teacher_pass100_1B_student_with_validation_new_hparams
+gradient_accumulation_steps: 32
+lr: 0.0001
+max_gen_tokens: 150
+max_length: 400
+model_name: EleutherAI/gpt-neo-1.3B
+teacher_name: EleutherAI/gpt-j-6B
+model_type: gptneo
+num_samples: 1
+teacher_data_path: ../few_shot/results/gpt-j-full-pass100.json
+# teacher_logits_path: ./teacher_logits/gpt-neo-2B-unfiltered-pass100
+temp: 0.0
+train_on_dev: false
+weight_decay: 0.1
