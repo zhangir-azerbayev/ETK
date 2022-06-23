@@ -22,6 +22,8 @@ from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer
 from transformers import AdamW
 from transformers.trainer_pt_utils import get_parameter_names
 
+from parallelformers import parallelize
+
 
 def load_trainset_from_log(result, tokenizer, train_max_length, train_on_dev=False):
     """
@@ -42,7 +44,7 @@ def gptneo_data_collator(data):
 
 
 def train_m0(model, epochs, tokenizer, batch_size, save_dir, dataset):
-    model = AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-125M")
+    model.cuda()
     training_args = Seq2SeqTrainingArguments(
         output_dir=save_dir,
         num_train_epochs=epochs,
@@ -63,7 +65,7 @@ def train_m0(model, epochs, tokenizer, batch_size, save_dir, dataset):
         optimizers=(optimizer, scheduler),
     ).train()
 
-    return model
+    return model.to("cpu")
 
 
 def sampling_step(
@@ -92,6 +94,8 @@ def sampling_step(
 
     Keep in mind this works with eval logs, not List<MathQInstance>
     """
+    #parallelize(model, num_gpus=2, fp16=False, verbose=None)
+    model.cuda()
     dataloader = batch_loader(unsolved, inference_batch_size)
 
     new_solved = []
@@ -147,7 +151,6 @@ def sampling_step(
     return solved + new_solved, updated_unsolved
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 def main():
     num_iters=10
     results_dir = "results/gptneo1B_ei"
@@ -171,11 +174,12 @@ def main():
     print(f"NUM SOLVED: {len(solved)}")
     print(f"NUM UNSOLVED: {len(unsolved)}")
 
+    model=None
     for i in range(num_iters): 
         print(f"ITERATION {i}")
-        with contextlib.redirect_stdout(None): 
-            model = AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B", output_loading_info=False)
-            model = model.to("cuda")
+
+        del model
+        model = AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B", output_loading_info=False)
         
         train_data = load_trainset_from_log(solved, tokenizer, train_max_length=275)
 
