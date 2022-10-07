@@ -1,6 +1,7 @@
 import torch 
 import json 
 import jsonlines
+import ndjson
 from pathlib import Path 
 
 class MBPPInstance(): 
@@ -19,6 +20,21 @@ class MBPPInstance():
 
     def __str__(self): 
         return f"task_id:{self.task_id}\n{self.text}\n{self.header}\n{self.body}\n{self.test}"
+
+def read_mbpp(path): 
+    path = Path(path)
+
+    with open(path) as f: 
+        data = ndjson.load(f)
+
+    for i in range(len(data)): 
+        data[i]["test"] = "\n".join(data[i]["test_setup_code"] \
+                + data[i]["test_list"] + data[i]["challenge_test_list"])
+        data[i].pop("test", "test_list", "challenge_test_list")
+
+    raise NotImplementedError("havent done this yet")
+
+    
 
 class MBPPTrainSet(torch.utils.data.Dataset): 
     def __init__(self, 
