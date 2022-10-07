@@ -58,7 +58,10 @@ def main():
 
     prompt = open("gsm8k_prompt.txt", "r").read()
 
-    train_data = read_gsm8k(f"../data/gsm8k/gsm8k_{split}.jsonl")
+    if dataset=="gsm8k": 
+        train_data = read_gsm8k(f"../data/gsm8k/gsm8k_{split}.jsonl")
+    else: 
+        raise KeyError("dataset field in config invalid")
 
     dataloader = batch_loader(train_data, num_prompts)
 
@@ -67,6 +70,9 @@ def main():
             tests = [gsm8k_test_of_float(instance.answer) for instance in batch]
             prompts = [gsm8k_prompt(prompt, instance.text) for instance in batch]
             headers = ["" for _ in batch]
+        else: 
+            raise KeyError("dataset field in config invalid")
+
         nls = [instance.text for instance in batch]
         task_ids = [instance.task_id for instance in batch]
 
@@ -86,6 +92,8 @@ def main():
 
             if dataset == "gsm8k":
                 bodies = [gsm8k_program_of_completion(completion) for completion in out]
+            else: 
+                raise KeyError("dataset field in config invalid")
 
             problem = {"prompt": header, "test": test}
 
