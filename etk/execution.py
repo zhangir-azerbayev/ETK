@@ -1,5 +1,4 @@
 # Basically copied from https://github.com/openai/human-eval/blob/master/human_eval/execution.py
-
 from typing import Optional, Callable, Dict
 import ast
 import contextlib
@@ -12,15 +11,17 @@ import signal
 import tempfile
 
 
-def semisafe_evaluate(completion: str, key : str, timeout : float):
+def check_correctness(problem: Dict, completion: str, timeout: float,
+                      completion_id: Optional[int] = None) -> Dict:
     """
-    Evaluates a code completion with some added safety features. 
+    Evaluates the functional correctness of a completion by running the test
+    suite provided in the problem. 
 
-    Returns a float if code succesfully executes. Returns a string describing 
-    error if code is unsuccesfull. 
+    :param completion_id: an optional completion ID so we can match
+        the results later even if execution finishes asynchronously.
     """
 
-    def semisafe_execute():
+    def unsafe_execute():
 
         with create_tempdir():
 
@@ -35,18 +36,19 @@ def semisafe_evaluate(completion: str, key : str, timeout : float):
             reliability_guard()
 
             # Construct the check program and run it.
+            check_program = (
+                problem["prompt"] + completion + "\n" +
+                problem["test"]
+            )
 
             try:
                 exec_globals = {}
                 with swallow_io():
                     with time_limit(timeout):
-                         exec(completion, exec_globals)
-                if key in exec_globals.keys(): 
-                    result.append(exec_globals[key])
-                else: 
-                    result.append("failed: answer not computed")
+                        exec(check_program, exec_globals)
+                result.append("passed")
             except TimeoutException:
-                result.append("failed: timed out")
+                result.append("timed out")
             except BaseException as e:
                 result.append(f"failed: {e}")
 
@@ -58,7 +60,7 @@ def semisafe_evaluate(completion: str, key : str, timeout : float):
     manager = multiprocessing.Manager()
     result = manager.list()
 
-    p = multiprocessing.Process(target=semisafe_execute)
+    p = multiprocessing.Process(target=unsafe_execute)
     p.start()
     p.join(timeout=timeout + 1)
     if p.is_alive():
@@ -67,7 +69,11 @@ def semisafe_evaluate(completion: str, key : str, timeout : float):
     if not result:
         result.append("timed out")
 
-    return result[0]
+    return dict(
+        passed=result[0] == "passed",
+        result=result[0],
+        completion_id=completion_id,
+    )
 
 
 @contextlib.contextmanager
@@ -143,6 +149,7 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,
     removing filesystem files, etc.)
+
     WARNING
     This function is NOT a security sandbox. Untrusted code, including, model-
     generated code, should not be blindly executed outside of one. See the 
@@ -201,9 +208,8 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
 
     import subprocess
     subprocess.Popen = None  # type: ignore
-    
-    # Next line causes an error for some reason. 
-    #__builtins__['help'] = None
+
+    __builtins__['help'] = None
 
     import sys
     sys.modules['ipdb'] = None

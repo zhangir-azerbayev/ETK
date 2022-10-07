@@ -1,0 +1,6 @@
+batch_size: 1 
+k: 100
+temp: 0.6 
+out_file: results/codex_gsm8k_full_pass100
+split: train 
+dataset: gsm8k
