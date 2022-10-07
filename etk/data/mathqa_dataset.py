@@ -3,6 +3,56 @@ import json
 import jsonlines
 from pathlib import Path 
 
+class MBPPInstance(): 
+    def __init__(self, 
+                 text, 
+                 header, 
+                 body, 
+                 test, 
+                 task_id, 
+                 ): 
+        self.text = text
+        self.header = header
+        self.body = body 
+        self.test = test
+        self.task_id = task_id
+
+    def __str__(self): 
+        return f"task_id:{self.task_id}\n{self.text}\n{self.header}\n{self.body}\n{self.test}"
+
+class MBPPTrainSet(torch.utils.data.Dataset): 
+    def __init__(self, 
+                 log_lst, 
+                 tokenizer, 
+                 max_length,
+                 use_teacher=False
+                 ):
+        self.log_lst = log_lst
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.use_teacher = use_teacher
+
+    def __getitem__(self, idx): 
+        dct = self.log_lst[idx]
+
+        full_text = dct["text"] + "\n" + dct["header"] + "\n" + dct["gold_solution"]
+
+        full_text_encode = self.tokenizer(full_text, 
+                                          max_length=self.max_length, 
+                                          truncation=True, 
+                                          padding='max_length', 
+                                          return_tensors="pt"
+                                          )
+
+        if self.use_teacher:
+            if "idx" in dct.keys():
+                full_text_encode["idx"] = dct["idx"]
+            return full_text_encode
+        ids = full_text_encode['input_ids'].squeeze()
+        mask = full_text_encode['attention_mask'].squeeze()
+
+        return ids.long(), mask.long()
+
 class MathQATrainSet(torch.utils.data.Dataset): 
     def __init__(self, log_lst, tokenizer, max_length, use_teacher=False):
         self.log_lst = log_lst
